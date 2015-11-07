@@ -224,7 +224,7 @@ def main(argv):
 
 	config_file = None
 	command = "check"
-	for arg in argv:
+	for arg in argv[1:]:
 		if arg=="enlist" or arg=="check" or arg=="sync":
 			command = arg
 		elif arg=="-v":
