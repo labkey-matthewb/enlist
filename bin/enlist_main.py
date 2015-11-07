@@ -21,7 +21,7 @@ def call(args):
 def check_output(args):
 	if verbose:
 		print "$", " ".join(args)
-	return subprocess.check_output(args)
+	return subprocess.check_output(args, stderr=subprocess.STDOUT)
 
 
 
@@ -92,6 +92,44 @@ def enlist_svn(config):
 	call(["svn", "checkout", config.url, config.path])
 
 
+def enlist_sanity_check(configs):
+	root = find_repository_root()
+	if root and not compare_paths(cwd,root):
+		print "! this does not seem to be a repository root"
+		sys.exit(1)
+	#TODO: check if parent is a repository, etc.
+	return True
+
+
+def find_repository_root():
+	global cwd
+	info = None
+	working_copy = None
+
+	# could be more general, but just handle svn case
+	try:
+		info = check_output(["svn", "info"])
+		working_copy = None
+		for line in info.split("\n"):
+			if line.startswith("Working Copy Root Path: "):
+				return line[len("Working Copy Root Path: "):].strip()
+	except subprocess.CalledProcessError:
+		None
+
+	try:
+		info = check_output(["git", "rev-parse", "--show-toplevel"])
+		return info.strip()
+	except subprocess.CalledProcessError:
+		None
+
+	return None
+
+
+def compare_paths(a,b):
+	a = os.path.normpath(a)
+	b = os.path.normpath(b)
+	return a.lower() == b.lower()
+
 # CHECK
 
 def check(config):
@@ -115,7 +153,7 @@ def check_git(config):
 		return False
 	url = check_output(["git", "config", "--get", "remote.origin.url"])
 	url = url.strip()
-	if url != config.url:
+	if not compare_url(url,config.url):
 		print "! wrong remote url: %s" % (url)
 		return False
 
@@ -152,10 +190,28 @@ def check_svn(config):
 			continue
 		line = line[5:]
 		url = line.strip()
-	if url != config.url:
+	if not compare_url(url,config.url):
 		print "! wrong remote url: %s" % (url)
 		return False
 	return True
+
+
+def compare_url(a,b):
+	a = a.lower()
+	b = b.lower()
+	if a.startswith("http://"):
+		a = a[7:]
+	elif a.startswith("https://"):
+		a = a[8:]
+	if b.startswith("http://"):
+		b = b[7:]
+	elif b.startswith("https://"):
+		b = b[8:]
+	if a.startswith("www."):
+		a = a[4:]
+	if b.startswith("www."):
+		b = b[4:]
+	return a.lower() == b.lower()
 
 
 # SWITCH
@@ -243,6 +299,7 @@ def main(argv):
 		sys.exit(1)
 
 	configs = parse_configuration_file(config_file)
+	enlist_sanity_check(configs)
 
 	if "enlist"==command:
 		if ".mrconfig" != config_file:
