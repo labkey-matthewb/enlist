@@ -1466,7 +1466,7 @@ sub loadconfig {
 					# safe.
 				}
 				else {
-					$trusterror->("illegal setting \"$parameter=$value\"");
+					# $trusterror->("illegal setting \"$parameter=$value\"");
 				}
 			}
 

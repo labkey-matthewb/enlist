@@ -14,13 +14,13 @@ verbose = False
 
 def call(args):
 	if verbose:
-		print " ".join(args)
+		print "$", " ".join(args)
 	return subprocess.call(args)
 
 
 def check_output(args):
 	if verbose:
-		print " ".join(args)
+		print "$", " ".join(args)
 	return subprocess.check_output(args)
 
 
@@ -36,17 +36,21 @@ class Config:
 	branch=None
 
 	def debug_print(self):
-		print "[%s]\n\trepo=%s\n\tpath=%s\n\turl=%s\n\tbranch=%s\n\tcheckout=%s\n" % (self.name, self.repo, self.path, self.url, self.branch, self.checkout)
+		print "[%s]\n\trepo=%s\n\tpath=%s\n\turl=%s\n\tbranch=%s" % (self.name, self.repo, self.path, self.url, self.branch)
+
 
 	def validate(self):
-		if self.checkout is not None:
+		if self.checkout:
 			if self.checkout.startswith("svn"):
 				self.repo = "svn"
 			if self.checkout.startswith("git"):
 				self.repo = "git"
-			m = re.search("\\shttps?://\\S*", self.checkout)
-			if m is not None:
-				self.url = m.string[m.start():m.end()].strip()
+			m = re.search("\\s(https?://\\S*)", self.checkout)
+			if m:
+				self.url = m.group(1)
+			m = re.search("\\s(-b|--branch)\\s*(\\S*)", self.checkout)
+			if m:
+				self.branch = m.group(2)
 
 		if self.repo is None and self.checkout is not None:
 			if self.checkout.startswith("svn"):
@@ -93,7 +97,7 @@ def enlist_svn(config):
 def check(config):
 	os.chdir(cwd)
 	if not os.path.isdir(config.path):
-		print "directory does not exist: " + config.path
+		print "! directory does not exist: " + config.path
 		return False
 	ok = True
 	if config.repo == "git":
@@ -107,12 +111,12 @@ def check(config):
 def check_git(config):
 	os.chdir(config.path)
 	if not os.path.isdir(".git"):
-		print "directory does not appear to have a git enlistment: " + os.getcwd()
+		print "! directory does not appear to have a git enlistment: " + os.getcwd()
 		return False
 	url = check_output(["git", "config", "--get", "remote.origin.url"])
 	url = url.strip()
 	if url != config.url:
-		print "wrong remote url: %s" % (url)
+		print "! wrong remote url: %s" % (url)
 		return False
 
 	if config.branch is not None:
@@ -126,10 +130,10 @@ def check_git(config):
 			if branch == config.branch:
 				found = True
 			elif branch != config.branch:
-				print "expected to find branch '%s' found '%s'" % (config.branch, branch)
+				print "! expected to find branch '%s' found '%s'" % (config.branch, branch)
 				return False
 		if not found:
-			print "couldn't find current branch for %s" % (config.path)
+			print "! couldn't find current branch for %s" % (config.path)
 			return False
 
 	return True
@@ -138,7 +142,7 @@ def check_git(config):
 def check_svn(config):
 	os.chdir(config.path)
 	if not os.path.isdir(".svn"):
-		print "directory does not appear to have a subversion enlistment: " + os.getcwd()
+		print "! directory does not appear to have a subversion enlistment: " + os.getcwd()
 		return False
 
 	info = check_output(["svn", "info"])
@@ -149,7 +153,7 @@ def check_svn(config):
 		line = line[5:]
 		url = line.strip()
 	if url != config.url:
-		print "wrong remote url: %s" % (url)
+		print "! wrong remote url: %s" % (url)
 		return False
 	return True
 
@@ -240,25 +244,26 @@ def main(argv):
 
 	configs = parse_configuration_file(config_file)
 
-	if verbose:
-		for config in configs:
-			config.debug_print()
-
 	if "enlist"==command:
 		if ".mrconfig" != config_file:
 			shutil.copyfile(config_file,".mrconfig")
 		for config in configs:
+			if verbose:
+				config.debug_print()
 			enlist(config)
-
-	if "sync"==command:
-		print "NYI"
+			if verbose:
+				print
 
 	if "check"==command:
 		OK = True
 		for config in configs:
+			if verbose:
+				config.debug_print()
 			ret = check(config)
 			if not ret:
 				OK = False
+			if verbose:
+				print
 		if OK:
 			print "looks good"
 
