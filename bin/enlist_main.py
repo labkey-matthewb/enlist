@@ -192,22 +192,21 @@ def check_svn(config):
 	return True
 
 
-def compare_url(a,b):
+def strip_url(a):
 	a = a.lower()
-	b = b.lower()
 	if a.startswith("http://"):
 		a = a[7:]
 	elif a.startswith("https://"):
 		a = a[8:]
-	if b.startswith("http://"):
-		b = b[7:]
-	elif b.startswith("https://"):
-		b = b[8:]
 	if a.startswith("www."):
 		a = a[4:]
-	if b.startswith("www."):
-		b = b[4:]
-	return a.lower() == b.lower()
+	if a.endswith(".git"):
+		a = a[:len(a)-4]
+	return a
+
+
+def compare_url(a,b):
+	return strip_url(a) == strip_url(b)
 
 
 def find_all_repos():
@@ -250,6 +249,7 @@ def parse_property(line):
 def parse_configuration_file(config_file):
 	configs = []
 	config = None
+	description = None
 
 	f = open(config_file,"r")
 	for line in f.readlines():
@@ -261,9 +261,11 @@ def parse_configuration_file(config_file):
 				configs.append(config)
 			config = Config()
 			config.name = line[1:len(line)-1]
-		if config is None:
-			continue
 		(key,value) = parse_property(line)
+		if key=="description" and not config:
+			description = value
+		if not config:
+			continue
 		if key=="checkout":
 			config.checkout = value
 		elif key=="repo":
@@ -276,6 +278,12 @@ def parse_configuration_file(config_file):
 
 	if config is not None:
 		configs.append(config)
+
+	if not description:
+		print "description is empty, fix it: " + config_file
+		sys.exit(1)
+	if verbose:
+		print description
 	for config in configs:
 		config.validate()
 	return configs
