@@ -29,3 +29,4 @@ Enlist should interoperate with with **mr**. There is a copy in the bin/. see he
 * bash and windows shell wrappers
 * manage active modules in intellij .ipr
 * manage database connections
+* create config from existing enlistments
