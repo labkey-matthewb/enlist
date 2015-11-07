@@ -61,6 +61,43 @@ class Config:
 		if self.path is None:
 			self.path = self.name
 
+
+def config_from_repos(rel_path):
+	if os.path.isdir(rel_path + "/.git"):
+		return config_from_git(rel_path)
+	elif os.path.isdir(rel_path + "/.svn"):
+		return config_from_svn(rel_path)
+	return None
+
+
+def config_from_svn(rel_path):
+	os.chdir(cwd + "/" + rel_path)
+	config = Config()
+	config.path = rel_path
+	config.repo = "svn"
+	info = check_output(["svn", "info"])
+	for line in info.split("\n"):
+		if line.startswith("URL: "):
+			config.url = line[5:].strip()
+	os.chdir(cwd)
+	return config
+
+
+def config_from_git(rel_path):
+	os.chdir(cwd + "/" + rel_path)
+	config = Config()
+	config.path = rel_path
+	config.repo = "git"
+	config.url = check_output(["git", "config", "--get", "remote.origin.url"]).strip()
+	branches = check_output(["git", "branch"])
+	branches = branches.split("\n")
+	for branch in branches:
+		if branch.startswith("*"):
+			config.branch = branch[2:].strip()
+	os.chdir(cwd)
+	return config
+
+
 # ENLIST
 
 def enlist(config):
@@ -143,52 +180,34 @@ def check(config):
 
 
 def check_git(config):
-	os.chdir(config.path)
-	if not os.path.isdir(".git"):
+	if not os.path.isdir(config.path + "/.git"):
 		print "! directory does not appear to have a git enlistment: " + os.getcwd()
 		return False
-	url = check_output(["git", "config", "--get", "remote.origin.url"])
-	url = url.strip()
-	if not compare_url(url,config.url):
-		print "! wrong remote url: %s" % (url)
-		return False
-
-	if config.branch is not None:
-		branches = check_output(["git", "branch"])
-		branches = branches.split("\n")
-		found = False
-		for branch in branches:
-			if not branch.startswith("*"):
-				continue
-			branch = branch[2:]
-			if branch == config.branch:
-				found = True
-			elif branch != config.branch:
-				print "! expected to find branch '%s' found '%s'" % (config.branch, branch)
-				return False
-		if not found:
-			print "! couldn't find current branch for %s" % (config.path)
-			return False
-
-	return True
+	existing = config_from_git(config.path)
+	return check_config(config,existing)
 
 
 def check_svn(config):
-	os.chdir(config.path)
-	if not os.path.isdir(".svn"):
-		print "! directory does not appear to have a subversion enlistment: " + os.getcwd()
+	if not os.path.isdir(config.path + "/.svn"):
+		print "! directory does not appear to have a git enlistment: " + os.getcwd()
+		return False
+	existing = config_from_svn(config.path)
+	return check_config(config,existing)
+
+
+def check_config(config,existing):
+	if not compare_url(existing.url,config.url):
+		print "! wrong remote url: %s" % (existing.url)
 		return False
 
-	info = check_output(["svn", "info"])
-	url = None
-	for line in info.split("\n"):
-		if not line.startswith("URL: "):
-			continue
-		line = line[5:]
-		url = line.strip()
-	if not compare_url(url,config.url):
-		print "! wrong remote url: %s" % (url)
+	if config.repo == "git" and not existing.branch:
+		print "! couldn't find current branch for %s" % (config.path)
 		return False
+
+	if config.branch and existing.branch != config.branch:
+		print "! expected to find branch '%s' found '%s'" % (config.branch, existing.branch)
+		return False
+
 	return True
 
 
