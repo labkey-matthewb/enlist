@@ -103,13 +103,9 @@ def enlist_sanity_check(configs):
 
 def find_repository_root():
 	global cwd
-	info = None
-	working_copy = None
 
-	# could be more general, but just handle svn case
 	try:
 		info = check_output(["svn", "info"])
-		working_copy = None
 		for line in info.split("\n"):
 			if line.startswith("Working Copy Root Path: "):
 				return line[len("Working Copy Root Path: "):].strip()
@@ -213,6 +209,18 @@ def compare_url(a,b):
 		b = b[4:]
 	return a.lower() == b.lower()
 
+
+def find_all_repos():
+	global cwd
+	repos = []
+	for root, dirs, files in os.walk(cwd):
+		if '.git' in dirs:
+			dirs.remove('.git')
+		if '.svn' in dirs:
+			dirs.remove('.svn')
+		if os.path.isdir(root + "/.svn") or os.path.isdir(root + "/.git"):
+			repos.append(root)
+	return repos
 
 # SWITCH
 
@@ -321,6 +329,15 @@ def main(argv):
 				OK = False
 			if verbose:
 				print
+		if verbose:
+			repos = find_all_repos()
+			for config in configs:
+				full = os.path.normpath(cwd + "/" + config.path)
+				if full in repos:
+					repos.remove(full)
+			if len(repos) > 0:
+				print "looks like some repositories might not be registered"
+				print "\n".join(repos)
 		if OK:
 			print "looks good"
 
