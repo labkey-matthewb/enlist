@@ -23,3 +23,9 @@ $ check.py -v
 
 # mr
 Enlist should interoperate with with **mr**. There is a copy in the bin/. see here for documentation: https://github.com/joeyh/myrepos
+
+
+# todos and ideas
+* bash and windows shell wrappers
+* manage active modules in intellij .ipr
+* manage database connections
