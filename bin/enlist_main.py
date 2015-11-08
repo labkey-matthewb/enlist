@@ -45,12 +45,12 @@ class Config:
 				self.repo = "svn"
 			if self.checkout.startswith("git"):
 				self.repo = "git"
-			m = re.search("\\s(https?://\\S*)", self.checkout)
+			m = re.search("\\s'?(https?://\\S*)", self.checkout)
 			if m:
-				self.url = m.group(1)
-			m = re.search("\\s(-b|--branch)\\s*(\\S*)", self.checkout)
+				self.url = m.group(1).strip("'")
+			m = re.search("\\s(-b|--branch)\\s*'?(\\S*)", self.checkout)
 			if m:
-				self.branch = m.group(2)
+				self.branch = m.group(2).strip("'")
 
 		if self.repo is None and self.checkout is not None:
 			if self.checkout.startswith("svn"):
@@ -130,10 +130,21 @@ def enlist_svn(config):
 
 
 def enlist_sanity_check(configs):
-	root = find_repository_root()
-	if root and not compare_paths(cwd,root):
+	root_config = None
+	for config in configs:
+		if config.path == "." or config.path == "./":
+			root_config = config
+	repos_root = find_repository_root()
+	if not repos_root:
+		return True
+	if not compare_paths(cwd,repos_root):
 		print "! this does not seem to be a repository root"
 		sys.exit(1)
+	curr_config = config_from_repos(".")
+	if curr_config and root_config and curr_config.repo != root_config.repo:
+		print "! found existing " + curr_config.repo + " enlistment. expected " + root_config.repo
+		sys.exit(1)
+
 	#TODO: check if parent is a repository, etc.
 	return True
 
@@ -147,13 +158,13 @@ def find_repository_root():
 			if line.startswith("Working Copy Root Path: "):
 				return line[len("Working Copy Root Path: "):].strip()
 	except subprocess.CalledProcessError:
-		None
+		pass
 
 	try:
 		info = check_output(["git", "rev-parse", "--show-toplevel"])
 		return info.strip()
 	except subprocess.CalledProcessError:
-		None
+		pass
 
 	return None
 
@@ -181,7 +192,7 @@ def check(config):
 
 def check_git(config):
 	if not os.path.isdir(config.path + "/.git"):
-		print "! directory does not appear to have a git enlistment: " + os.getcwd()
+		print "! directory does not appear to have a git enlistment: " + config.path
 		return False
 	existing = config_from_git(config.path)
 	return check_config(config,existing)
@@ -189,13 +200,16 @@ def check_git(config):
 
 def check_svn(config):
 	if not os.path.isdir(config.path + "/.svn"):
-		print "! directory does not appear to have a git enlistment: " + os.getcwd()
+		print "! directory does not appear to have a svn enlistment: " + config.path
 		return False
 	existing = config_from_svn(config.path)
 	return check_config(config,existing)
 
 
 def check_config(config,existing):
+	if existing.repo != config.repo:
+		print "! found existing " + existing.repo + " repository, expected " + config.repo
+		return False
 	if not compare_url(existing.url,config.url):
 		print "! wrong remote url: %s" % (existing.url)
 		return False
@@ -212,6 +226,8 @@ def check_config(config,existing):
 
 
 def strip_url(a):
+	if not a:
+		return ""
 	a = a.lower()
 	if a.startswith("http://"):
 		a = a[7:]
@@ -278,12 +294,15 @@ def parse_configuration_file(config_file):
 		if line.startswith("[") and line.endswith("]"):
 			if config is not None:
 				configs.append(config)
-			config = Config()
-			config.name = line[1:len(line)-1]
+				config = None
+			section = line[1:len(line)-1]
+			if section != "DEFAULT":
+				config = Config()
+				config.name = section
 		(key,value) = parse_property(line)
-		if key=="description" and not config:
-			description = value
 		if not config:
+			if key=="description":
+				description = value
 			continue
 		if key=="checkout":
 			config.checkout = value
