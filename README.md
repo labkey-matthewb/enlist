@@ -27,6 +27,7 @@ Enlist should interoperate with with **mr**. There is a copy in the bin/. see he
 
 # todos and ideas
 * bash and windows shell wrappers
+* create config from existing enlistments
+* merge option for enlist (don't overwrite local updates to .mrconfig)
 * manage active modules in intellij .ipr
 * manage database connections
-* create config from existing enlistments
