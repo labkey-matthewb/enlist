@@ -31,3 +31,4 @@ Enlist should interoperate with with **mr**. There is a copy in the bin/. see he
 * merge option for enlist (don't overwrite local updates to .mrconfig)
 * manage active modules in intellij .ipr
 * manage database connections
+* update ~/.mrtrust

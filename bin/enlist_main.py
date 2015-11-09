@@ -370,9 +370,12 @@ def main(argv):
 		for config in configs:
 			if verbose:
 				config.debug_print()
+			else:
+				print "[" +  config.path + "]"
 			ret = check(config)
-			if not ret:
-				OK = False
+			if ret:
+				print "ok"
+			OK = OK and ret
 			if verbose:
 				print
 		if verbose:
