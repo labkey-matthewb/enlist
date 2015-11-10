@@ -349,7 +349,11 @@ def main(argv):
 				"using configuration file .mrconfig"
 
 	if config_file is None or command is None:
-		print "Usage: enlist.py [enlist|check|sync] {config file}"
+		print "Usage: enlist_main.py [enlist|check|sync] [-v] [config_file]"
+		print "Usage: enlist.py [-v] [config_file]"
+		print "Usage: check.py [-v] [config_file]"
+		print ""
+		print "After successful enlist, you can omit the config file to use the enlisted configuration."
 		sys.exit(1)
 
 	configs = parse_configuration_file(config_file)
