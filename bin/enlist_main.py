@@ -34,6 +34,7 @@ class Config:
 	path=None
 	url=None
 	branch=None
+	_source=None		# used for merging
 
 	def debug_print(self):
 		print "[%s]\n\trepo=%s\n\tpath=%s\n\turl=%s\n\tbranch=%s" % (self.name, self.repo, self.path, self.url, self.branch)
@@ -60,6 +61,32 @@ class Config:
 
 		if self.path is None:
 			self.path = self.name
+
+
+	def write(self, f):
+		if self._source:
+			f.write(self._source)
+			return
+		f.write("[" + self.path + "]\n")
+		if self.checkout:
+			f.write("checkout = ")
+			f.write(self.checkout)
+			f.write("\n")
+			return
+		if self.repo == "git":
+			f.write("checkout = git clone ")
+			f.write(self.url)
+			if self.branch:
+				f.write(" --branch ")
+				f.write(self.branch)
+			f.write("\n")
+			return
+		if self.repo == "svn":
+			f.write("checkout = svn checkout ")
+			f.write(self.url)
+			f.write("\n")
+			return
+		print "!could not format configuration for " + self.path
 
 
 def config_from_repos(rel_path):
@@ -272,6 +299,32 @@ def switch_git(config):
 	return
 
 
+# ADD/MERGE CONFIGURATION
+
+def merge_configs(existing, apply):
+	dict = {}
+	merged = []
+	changed = 0
+	for i in range(0,len(existing)-1):
+		config = existing[i]
+		merged.append(config)
+		dict[config.path.lower()] = i
+	for config in apply:
+		if dict.has_key(config.path.lower()):
+			i = dict[config.path.lower()]
+			orig = merged[i]
+			if compare_url(orig.url, config.url) and orig.branch==config.branch:
+				continue
+			merged[i] = config
+			print "updating config for " + config.path
+			changed += 1
+		else:
+			merged.append(config)
+			print "adding config for " + config.path
+			changed += 1
+	return merged, changed
+
+
 # MAIN
 
 def parse_property(line):
@@ -284,11 +337,12 @@ def parse_property(line):
 def parse_configuration_file(config_file):
 	configs = []
 	config = None
-	description = None
+	section = ""
+	defaults = {}
 
 	f = open(config_file,"r")
-	for line in f.readlines():
-		line = line.strip()
+	for rawline in f.readlines():
+		line = rawline.strip()
 		if line.startswith("#") or line=="":
 			continue
 		if line.startswith("[") and line.endswith("]"):
@@ -299,11 +353,15 @@ def parse_configuration_file(config_file):
 			if section != "DEFAULT":
 				config = Config()
 				config.name = section
+				config.source = line + "\n"
+				continue
 		(key,value) = parse_property(line)
 		if not config:
-			if key=="description":
-				description = value
+			if section == "DEFAULT":
+				if key and value:
+					defaults[key] = value
 			continue
+		config.source = config.source + rawline + "\n"
 		if key=="checkout":
 			config.checkout = value
 		elif key=="repo":
@@ -317,14 +375,30 @@ def parse_configuration_file(config_file):
 	if config is not None:
 		configs.append(config)
 
-	if not description:
-		print "description is empty, fix it: " + config_file
-		sys.exit(1)
-	if verbose:
-		print description
+	if not defaults.has_key('description') or not defaults['description']:
+		print "! description not found: " + config_file
+	elif verbose:
+		print defaults['description']
 	for config in configs:
 		config.validate()
-	return configs
+	return configs, defaults
+
+
+def write_configuration_file(config_file, configs, defaults):
+	f = open(config_file, "w")
+	if defaults:
+		f.write("[DEFAULT]\n")
+		for k, v in defaults.iteritems():
+			if k and v:
+				f.write(k)
+				f.write(" = ")
+				f.write(v)
+				f.write("\n")
+		f.write("\n")
+	for config in configs:
+		config.write(f)
+		f.write("\n")
+	f.close()
 
 
 def main(argv):
@@ -335,28 +409,31 @@ def main(argv):
 	config_file = None
 	command = "check"
 	for arg in argv[1:]:
-		if arg=="enlist" or arg=="check" or arg=="sync":
+		if arg=="enlist" or arg=="check" or arg=="addconfig":
 			command = arg
 		elif arg=="-v":
 			verbose = True
 		else:
 			config_file = arg
 
-	if config_file is None:
+	if config_file is None and command != "addconfig":
 		if os.path.isfile(".mrconfig"):
 			config_file = ".mrconfig"
 			if verbose:
 				"using configuration file .mrconfig"
 
 	if config_file is None or command is None:
-		print "Usage: enlist_main.py [enlist|check|sync] [-v] [config_file]"
-		print "Usage: enlist.py [-v] [config_file]"
-		print "Usage: check.py [-v] [config_file]"
+		print "Usage: python enlist_main.py [enlist|check|addconfig] [-v] [config_file]"
+		print "Usage: enlist [-v] [config_file]"
+		print "Usage: check [-v] [config_file]"
+		print "Usage: addconfig [-v] [config_file]"
 		print ""
 		print "After successful enlist, you can omit the config file to use the enlisted configuration."
+		print "The config_file is required for addconfig command."
 		sys.exit(1)
 
-	configs = parse_configuration_file(config_file)
+
+	configs, defaults = parse_configuration_file(config_file)
 	enlist_sanity_check(configs)
 
 	if "enlist"==command:
@@ -393,6 +470,23 @@ def main(argv):
 				print "\n".join(repos)
 		if OK:
 			print "looks good"
+
+	if "addconfig"==command:
+		if ".mrconfig"==config_file:
+			print "! addconfig command requires a source config file"
+			sys.exit(1)
+		local_configs = []
+		if os.path.isfile(".mrconfig"):
+			local_configs, local_defaults = parse_configuration_file(".mrconfig")
+			if len(local_defaults) > 0:
+				defaults = local_defaults
+
+		merged_configs, changes = merge_configs(local_configs, configs)
+		if changes == 0:
+			print "no new configurations were found in : " + config_file
+		else:
+			write_configuration_file(".mrconfig", merged_configs, defaults)
+			print changes, "configuration(s) added, run enlist to apply"
 
 
 if __name__ == "__main__":
