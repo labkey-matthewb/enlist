@@ -305,7 +305,7 @@ def merge_configs(existing, apply):
 	dict = {}
 	merged = []
 	changed = 0
-	for i in range(0,len(existing)-1):
+	for i in range(0,len(existing)):
 		config = existing[i]
 		merged.append(config)
 		dict[config.path.lower()] = i
@@ -486,7 +486,7 @@ def main(argv):
 			print "no new configurations were found in : " + config_file
 		else:
 			write_configuration_file(".mrconfig", merged_configs, defaults)
-			print changes, "configuration(s) added, run enlist to apply"
+			print changes, "configuration(s) added, run 'enlist' or 'mr update' to apply"
 
 
 if __name__ == "__main__":
